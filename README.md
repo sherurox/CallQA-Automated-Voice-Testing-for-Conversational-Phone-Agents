@@ -1,41 +1,78 @@
-# Voice Bot - Medical Office AI Testing
+# 🩺 CallQA — Automated Voice Testing for Conversational Phone Agents
 
-An automated voice bot system that calls a medical office AI agent to test conversation quality, identify bugs, and evaluate patient interaction capabilities.
+An end-to-end QA harness that makes real outbound calls to a voice AI agent, simulates diverse patient scenarios, transcribes conversations, and surfaces bugs in agent behavior — fully automated and reproducible.
 
----
-
-## Overview
-
-This project tests Pretty Good AI's medical office phone system by simulating realistic patient scenarios through automated voice calls. The bot makes real phone calls to **805-439-8008**, records conversations, transcribes audio, and identifies quality issues in the AI agent's responses.
+> ✅ Built for repeatable testing: same scenarios → consistent runs → easier debugging  
+> ✅ Configurable to any authorized phone agent or test line via environment variable
 
 ---
 
-## Features
+## Why This Project Exists
 
-* **Real Phone Calls** – Makes actual calls via Twilio
-* **10 Test Scenarios** – Appointment scheduling, refills, cancellations, and edge cases
-* **Automatic Transcription** – Uses Groq Whisper for speech-to-text conversion
-* **Bug Detection** – Identifies response errors, logic failures, and conversation flow issues
-* **Complete Transcripts** – Captures both patient (bot) and agent (AI) dialogue
+Voice agents are notoriously hard to test:
+- Manual call testing doesn't scale
+- Regressions are easy to miss
+- "It sounded fine" isn't actionable
+
+CallQA turns voice-agent testing into a structured, automated pipeline:
+
+**Scenario → Call → Recording → Transcription → Report**
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Voice Calls | [Twilio](https://www.twilio.com/) — outbound calls + recording |
+| Call Scripting | TwiML (Twilio Markup Language) |
+| Speech-to-Text | [Groq Whisper](https://console.groq.com/) (`whisper-large-v3-turbo`) |
+| Bug Analysis | Python — heuristic pattern matching on transcripts |
+| Storage | JSON transcripts + MP3 recordings |
+| Language | Python 3.12 |
+
+---
+
+## Architecture
+```
+Scenario Definition
+       ↓
+TwiML Script Builder     (pre-scripted patient dialogue with tuned pauses)
+       ↓
+Twilio Outbound Call     (real call to live voice agent)
+       ↓
+Audio Recording          (full conversation captured server-side)
+       ↓
+Groq Whisper STT         (audio → structured transcript)
+       ↓
+Heuristic Bug Analyzer   (pattern matching for failures, loops, bad phrasing)
+       ↓
+JSON Transcript + BUG_REPORT.md
+```
+
+### Design Decision: Pre-Scripted vs. Interactive
+
+The alternative — a fully interactive bot using real-time webhooks, live transcription, and LLM-generated responses — introduces significant infrastructure overhead (webhook servers, ngrok, latency handling) without meaningfully improving bug detection quality for most scenarios.
+
+The pre-scripted approach with calibrated pauses (18s initial, 10–14s between turns) is reliable, reproducible, and finds the same critical agent failures a real-time system would — at a fraction of the complexity. **The goal is surfacing bugs, not simulating perfect conversations.**
+
+An interactive patient mode (LLM-driven responses) is scaffolded in `src/bot.py` as a future enhancement.
 
 ---
 
 ## Project Structure
 ```
-voice-bot-challenge/
 ├── src/
-│   ├── bot.py              # Patient bot conversation logic
-│   ├── call_handler.py     # Twilio call management & transcription
-│   └── scenarios.py        # 10 test scenario definitions
-├── transcripts/            # Call recordings and transcripts (JSON)
-├── main.py                 # Main entry point
-├── analyze_bugs.py         # Bug analysis and reporting
-├── requirements.txt        # Python dependencies
-├── .env                    # API keys (not committed)
-├── .env.example            # Environment variable template
-├── README.md               # This file
-├── architecture.md         # System design documentation
-└── BUG_REPORT.md           # Identified bugs and issues
+│   ├── bot.py              # (Roadmap) interactive LLM-driven patient
+│   ├── call_handler.py     # Twilio lifecycle: call → record → transcribe → save
+│   └── scenarios.py        # 10 patient persona + goal definitions
+├── transcripts/            # JSON transcripts + MP3 recordings per call
+├── main.py                 # Entry point — run one or all scenarios
+├── analyze_bugs.py         # Transcript analysis → BUG_REPORT.md
+├── requirements.txt
+├── .env.example
+├── architecture.md         # Extended design notes
+└── BUG_REPORT.md           # Full findings with transcript evidence
 ```
 
 ---
@@ -44,110 +81,47 @@ voice-bot-challenge/
 
 ### Prerequisites
 
-* Python 3.9+
-* Twilio account (with upgraded credits to call unverified numbers)
-* Groq API account (free tier works)
-
----
+- Python 3.9+
+- [Twilio account](https://www.twilio.com/) — add credits to call unverified numbers
+- [Groq account](https://console.groq.com/) — free tier is sufficient
 
 ### Installation
-
-1. Clone the repository
-```
-git clone <your-repo-url>
-cd voice-bot-challenge
-```
-
-2. Create virtual environment
-
-Mac/Linux:
-```
-python3 -m venv venv
-source venv/bin/activate
-```
-
-Windows:
-```
-venv\Scripts\activate
-```
-
-3. Install dependencies
-```
+```bash
+git clone https://github.com/sherurox/pretty-good-ai-voice-bot
+cd pretty-good-ai-voice-bot
+python3 -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-4. Configure environment variables
-```
 cp .env.example .env
 ```
 
 Edit `.env`:
-```
+```env
 TWILIO_ACCOUNT_SID=your_twilio_sid
 TWILIO_AUTH_TOKEN=your_twilio_token
 TWILIO_PHONE_NUMBER=your_twilio_number
 GROQ_API_KEY=your_groq_api_key
-TARGET_PHONE_NUMBER=8054398008
+TARGET_PHONE_NUMBER=+1xxxxxxxxxx   # your authorized test line
 ```
-
----
-
-## Getting API Keys
-
-### Twilio
-
-[https://www.twilio.com/](https://www.twilio.com/)
-
-1. Sign up for free account
-2. Get Account SID and Auth Token from Console
-3. Get a phone number (trial includes one free)
-4. Add credits to call unverified numbers
-
-### Groq
-
-[https://console.groq.com/](https://console.groq.com/)
-
-1. Sign up for free account
-2. Create API key from dashboard
-3. Free tier includes Whisper transcription
 
 ---
 
 ## Usage
-
-### Run Single Scenario
-```
+```bash
+# Run a single scenario (e.g. scenario #1)
 python main.py 1
-```
 
-Runs scenario #1 (Simple Appointment Scheduling)
-
----
-
-### Run All 10 Scenarios
-```
+# Run all 10 scenarios (~30–35 min)
 python main.py all
-```
 
-This will:
-
-* Make 10 phone calls
-* Record and transcribe each conversation
-* Save transcripts to `transcripts/`
-* Take approximately 30–35 minutes
-
----
-
-### Analyze Results
-```
+# Analyze transcripts and generate bug report
 python analyze_bugs.py
 ```
 
-Generates `BUG_REPORT.md` with identified issues.
+Artifacts are written to `transcripts/` after each run.
 
 ---
 
-## Test Scenarios
+## Test Scenarios (10 included)
 
 1. Simple Appointment Scheduling
 2. Medication Refill
@@ -160,135 +134,53 @@ Generates `BUG_REPORT.md` with identified issues.
 9. Billing Question
 10. Wrong Number
 
----
-
-## Architecture
-
-This system uses a **pre-scripted approach with timed pauses**:
-
-* Patient bot speaks predefined messages
-* 18-second initial pause
-* 10–14 second pauses between messages
-* Twilio records entire conversation
-* Groq Whisper transcribes audio
-* Pattern matching identifies bugs
-
-See `architecture.md` for detailed design decisions.
+You can extend scenarios in `src/scenarios.py` and add corresponding scripted message flows in `src/call_handler.py → _build_conversation_script()`.
 
 ---
 
-## Key Design Decisions
+## Output Format
 
-### Why pre-scripted instead of interactive?
+Each call produces two artifacts:
+```
+transcripts/
+├── call_20260216_143022.json          # Structured transcript + metadata
+└── call_20260216_143022_recording.mp3 # Raw audio
+```
 
-* Reliable and reproducible testing
-* Simpler implementation
-* Faster development
-* Successfully identifies critical bugs
-
-### Tradeoffs
-
-* Not perfectly synchronized with agent responses
-* May miss conversational nuances
-* Still effective at identifying logic errors
+The JSON includes: `call_id`, `timestamp`, `scenario_id`, `persona`, `goal`, `conversation[]` (patient script + full transcription + best-effort speaker parsing).
 
 ---
 
-## Output
+## Customization
 
-Each call generates:
+**Adjust timing/pauses** → `src/call_handler.py → _create_twiml_script()`
 
-* JSON transcript:
-  `transcripts/call_YYYYMMDD_HHMMSS.json`
-
-* Audio recording:
-  `transcripts/call_YYYYMMDD_HHMMSS_recording.mp3`
-
-Transcript includes:
-
-* Patient script messages
-* Full transcription
-* Parsed dialogue
-* Timestamps and metadata
+**Add new scenarios** → `src/scenarios.py` for metadata, `src/call_handler.py` for the scripted message sequence
 
 ---
 
-## Results Summary
+## Roadmap
 
-Success Rate: **4/10 scenarios (40%)**
-
-### Working Scenarios
-
-* New appointment scheduling
-* Office hours inquiry
-* Insurance verification
-* Wrong number handling
-
-### Failed Scenarios
-
-* Medication refills (phone number loop)
-* Appointment rescheduling
-* Urgent care handling
-* Cancellations
-* Billing questions
-* Confused patient support
+- **Interactive patient mode** — real-time agent response triggers LLM-generated patient reply (scaffolded in `src/bot.py`)
+- **Speaker diarization** — cleaner patient vs. agent separation in transcripts
+- **Richer evaluation** — sentiment analysis, task-completion scoring, rubric grading
+- **CI-friendly dry runs** — prerecorded audio replays instead of live calls
 
 ---
 
-## Critical Bugs Found
+## Important
 
-1. Phone Number Loop Bug
-2. Rescheduling Failure
-3. Urgent Care Not Prioritized
-4. Low Task Completion Rate
-5. Inflexible Workflow
-6. Name Transcription Errors
-
-See `BUG_REPORT.md` for detailed evidence.
-
----
-
-## Cost Estimate
-
-For 10 calls:
-
-* Twilio: ~$1–2
-* Groq Whisper: Free
-* Total: ~$1–2
-
----
-
-## Development Stack
-
-* Python 3.12
-* Twilio (voice + recording)
-* Groq Whisper (transcription)
-* Pre-scripted TwiML
-
----
-
-## Troubleshooting
-
-**Twilio trial error**
-Add credits to your account.
-
-**Groq quota exceeded**
-Check usage in console.
-
-**No transcripts generated**
-Ensure recordings process fully and check folder permissions.
-
-**Calls too short**
-Adjust pause timings in `_create_twiml_script()` inside `src/call_handler.py`.
+> Only call numbers you own or have **explicit permission** to test. Do not store or commit real patient data — use synthetic scenarios only.
 
 ---
 
 ## License
 
-Created as part of a technical challenge for Pretty Good AI.
+MIT
 
 ---
 
 ## Author
 
-Built with assistance from Claude (Anthropic) for iterative development, debugging, and implementation support.
+**Shreyas Khandale**  
+Built with iterative development support from Claude (Anthropic).
